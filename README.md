@@ -1,6 +1,4 @@
-# rbac-project
-
-# absensi_karyawan
+# absebsi karyawan
 
 cara copy semua file dengan cepat (sudah install git)
 - bikin folder baru
