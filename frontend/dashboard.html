@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+</head>
+<body>
+
+<h2>Dashboard</h2>
+
+<input id="search" placeholder="Search">
+<button onclick="loadData()">Cari</button>
+<button onclick="loadData(true)">Load All</button>
+<button onclick="goAdmin()">Go to Admin Dashboard</button>
+
+<table border="1">
+  <thead>
+    <tr>
+      <th onclick="setSort('name')">Nama</th>
+      <th onclick="setSort('department')">Departemen</th>
+      <th>Hadir</th>
+      <th>Waktu masuk</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<button onclick="prev()">Prev</button>
+<button onclick="next()">Next</button>
+
+<script>
+let page = 1;
+let sort = '';
+let loadAll = false;
+
+const token = localStorage.getItem('token');
+if (!token) {
+  alert('Belum login');
+  location.href = 'login.html';
+}
+
+function setSort(col) {
+  sort = col;
+  loadData();
+}
+
+async function loadData(all = false) {
+  loadAll = all;
+  const search = document.getElementById('search').value;
+
+  let url = `http://localhost:3000/api/dashboard?page=${page}&sort=${sort}&search=${encodeURIComponent(search)}`;
+  if (loadAll) url += '&limit=all';
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: 'Bearer ' + token
+    }
+  });
+
+  if (!res.ok) {
+    alert('Gagal mengambil data: ' + res.status);
+    return;
+  }
+  const result = await res.json();
+  console.log('RESPONSE JSON:', result);
+
+  render(result.data || [], result.role);
+}
+
+function render(data, role) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  data.forEach(row => {
+    let aksi = '';
+    let checkinBtn = '';
+
+    if (!row.waktuMasuk) {
+      checkinBtn = `<button onclick="checkIn(${row.id})">hadir</button>`;
+    } else {
+      checkinBtn = `<button disabled>Checked</button>`;
+    }
+
+    if (role === 'Admin') {
+      aksi = `
+        <button onclick="editData(${row.id})">Edit</button>
+        <button onclick="deleteData(${row.id})">Delete</button>
+      `;
+    } else if (role === 'Editor') {
+      aksi = `<button onclick="editData(${row.id})">Edit</button>`;
+    }
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.name}</td>
+        <td>${row.department}</td>
+        <td>${checkinBtn}</td>
+        <td>${row.waktuMasuk ? new Date(row.waktuMasuk).toLocaleString() : '-'}</td>
+        <td>${row.status || '-'}</td>
+        <td>${aksi}</td>
+      </tr>
+    `;
+  });
+}
+
+async function checkIn(id) {
+  const res = await fetch(`http://localhost:3000/api/dashboard/checkin/${id}`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token
+    }
+  });
+
+  if (res.ok) {
+    alert('absen berhasil');
+    loadData();
+  } else {
+    alert('Gagal absen');
+  }
+}
+
+async function deleteData(id) {
+  if (!confirm('Yakin ingin menghapus data ini?')) return;
+
+  const res = await fetch(`http://localhost:3000/api/dashboard/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: 'Bearer ' + token
+    }
+  });
+
+  if (res.ok) {
+    alert('Data berhasil dihapus');
+    loadData();
+  } else {
+    alert('Gagal menghapus data');
+  }
+}
+
+async function editData(id) {
+  const name = prompt('Nama baru:');
+  const department = prompt('Departemen baru:');
+
+  if (!name || !department) {
+    alert('Edit dibatalkan');
+    return;
+  }
+
+  const res = await fetch(`http://localhost:3000/api/dashboard/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token
+    },
+    body: JSON.stringify({ name, department })
+  });
+
+  if (res.ok) {
+    alert('Data berhasil diupdate');
+    loadData();
+  } else {
+    alert('Gagal update data');
+  }
+}
+
+
+function next() {
+  page++;
+  loadData();
+}
+
+function prev() {
+  if (page > 1) page--;
+  loadData();
+}
+
+loadData();
+
+async function goAdmin() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Belum login');
+    return;
+  }
+
+  const res = await fetch('http://localhost:3000/auth/me', {
+    headers: {
+      Authorization: 'Bearer ' + token
+    }
+  });
+
+  if (res.status === 401) {
+    alert('Token tidak valid atau kadaluarsa, silakan login ulang');
+    localStorage.removeItem('token');
+    return;
+  }
+
+  if (res.status === 403) {
+    alert('403 Forbidden');
+    return;
+  }
+
+  if (!res.ok) {
+    alert('Server error');
+    return;
+  }
+
+  const me = await res.json();
+
+  if (me.role !== 'Admin') {
+    alert('403 Forbidden: Akses ditolak');
+    return;
+  }
+
+  window.location.href = 'dashboardAdmin.html';
+}
+
+
+</script>
+
+</body>
+</html>
